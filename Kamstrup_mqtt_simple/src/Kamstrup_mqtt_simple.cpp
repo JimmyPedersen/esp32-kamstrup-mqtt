@@ -4,6 +4,7 @@
 #include "mbusparser.h"
 #include "secrets.h"
 #include "esp_log.h"
+#include "mbedtls/gcm.h"
 
 void hexStr2bArr(uint8_t* dest, const char* source, int bytes_n);
 void sendmsg(String topic, String payload);
@@ -24,7 +25,7 @@ uint8_t receiveBuffer[500];
 uint8_t decryptedFrameBuffer[500];
 VectorView decryptedFrame(decryptedFrameBuffer, 0);
 MbusStreamParser streamParser(receiveBuffer, sizeof(receiveBuffer));
-//mbedtls_gcm_context m_ctx;
+mbedtls_gcm_context m_ctx;
 
 // wifi auto reconnect
 unsigned long currentMillis;
@@ -235,7 +236,7 @@ bool decrypt(const VectorView& frame) {
     uint8_t cipher_text[frame.size() - headersize - footersize - 18 - 12];
     memcpy(cipher_text, decryptedFrameBuffer + headersize + 18, frame.size() - headersize - footersize - 12 - 18);
 
-/*
+
     // Prepare the plaintext bufferif
     uint8_t plaintext[sizeof(cipher_text)];
 
@@ -255,7 +256,7 @@ bool decrypt(const VectorView& frame) {
     mbedtls_gcm_free(&m_ctx);
 
     //copy replace encrypted data with decrypted for mbusparser library. Checksum not updated. Hopefully not needed
-    memcpy(decryptedFrameBuffer + headersize + 18, plaintext, sizeof(plaintext));*/
+    memcpy(decryptedFrameBuffer + headersize + 18, plaintext, sizeof(plaintext));
   }
   decryptedFrame = VectorView(decryptedFrameBuffer, frame.size());
 
