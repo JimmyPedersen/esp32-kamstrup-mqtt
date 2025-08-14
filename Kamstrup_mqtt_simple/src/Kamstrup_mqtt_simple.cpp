@@ -35,38 +35,6 @@ unsigned long wifiReconnectInterval = 30000;
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-/*
-void setup() {
-  Serial.begin(115200);
-  delay(1000);
-
-  Serial.println("\nClearing old WiFi credentials...");
-  WiFi.disconnect(true, true); // Clear NVS
-  delay(1000);
-
-  WiFi.mode(WIFI_STA);
-  Serial.printf("Connecting to SSID: %s\n", ssid);
-  WiFi.begin(ssid, password);
-
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
-    Serial.print(".");
-    delay(500);
-  }
-
-  Serial.println();
-  WiFi.printDiag(Serial);
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("✅ Connected!");
-    Serial.print("IP: ");
-    Serial.println(WiFi.localIP());
-  } else {
-    Serial.println("❌ Failed to connect.");
-  }
-}
-*/
-
 void setup() {
   //DEBUG_BEGIN
   //DEBUG_PRINTLN("")
@@ -235,7 +203,6 @@ bool decrypt(const VectorView& frame) {
 
     uint8_t cipher_text[frame.size() - headersize - footersize - 18 - 12];
     memcpy(cipher_text, decryptedFrameBuffer + headersize + 18, frame.size() - headersize - footersize - 12 - 18);
-
 
     // Prepare the plaintext bufferif
     uint8_t plaintext[sizeof(cipher_text)];
