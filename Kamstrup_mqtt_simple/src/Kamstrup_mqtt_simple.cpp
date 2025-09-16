@@ -14,8 +14,8 @@ void sendmsg(String topic, String payload);
 #define DEBUG_PRINTLN(x) Serial.println(x);sendmsg(String(mqtt_topic)+"/status",x);
 
 // Pins used for HAN port
-#define METER_RX 4
-#define METER_TX 5
+#define METER_RX 20//11//4
+#define METER_TX 21//10//5
 
 const size_t headersize = 11;
 const size_t footersize = 3;
@@ -39,8 +39,10 @@ void setup() {
   //DEBUG_BEGIN
   //DEBUG_PRINTLN("")
   Serial.begin(115200);
+  
   Serial.println(" I can print something");
   //pinMode(BUILTIN_LED, OUTPUT);
+  
 
   esp_log_level_set("wifi", ESP_LOG_VERBOSE);
 
@@ -75,6 +77,8 @@ void setup() {
 //  Serial.swap();
 
   Serial1.begin(2400, SERIAL_8N1, METER_RX, METER_TX);
+  pinMode(METER_RX, INPUT_PULLUP);
+//  Serial1.setRxInvert(true);
   hexStr2bArr(encryption_key, conf_key, sizeof(encryption_key));
   hexStr2bArr(authentication_key, conf_authkey, sizeof(authentication_key));
   Serial.println("Setup completed");
@@ -262,6 +266,8 @@ void sendmsg(String topic, String payload) {
 void loop() {
   while (Serial1.available() > 0) {
     //for(int i=0;i<sizeof(input);i++){
+//    int byte = Serial1.read();
+//    Serial.printf("%c(%02X)", byte, byte);
     if (streamParser.pushData(Serial1.read())) {
       //  if (streamParser.pushData(input[i])) {
       VectorView frame = streamParser.getFrame();
