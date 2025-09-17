@@ -9,13 +9,21 @@
 void hexStr2bArr(uint8_t* dest, const char* source, int bytes_n);
 void sendmsg(String topic, String payload);
 
+#define IS_DNODE_NVE  true  // True if dNodeNVE. False if testing RX data on TXD pin (to be used in P1+NVE hybrid card)
+
 #define DEBUG_BEGIN Serial.begin(115200);
 #define DEBUG_PRINT(x) Serial.print(x);sendmsg(String(mqtt_topic)+"/status",x);
 #define DEBUG_PRINTLN(x) Serial.println(x);sendmsg(String(mqtt_topic)+"/status",x);
 
 // Pins used for HAN port
-#define METER_RX 20//11//4
-#define METER_TX 21//10//5
+#if IS_DNODE_NVE
+  #define METER_RX 20//11//4
+  #define METER_TX 21//10//5
+#else
+  // For testing hybrid board configuration with P1 on RXD and NVE on TXD
+  #define METER_RX 21 //20//11//4
+  #define METER_TX -1 //21//10//5
+#endif
 
 const size_t headersize = 11;
 const size_t footersize = 3;
@@ -79,6 +87,7 @@ void setup() {
   Serial1.begin(2400, SERIAL_8N1, METER_RX, METER_TX);
   pinMode(METER_RX, INPUT_PULLUP);
 //  Serial1.setRxInvert(true);
+
   hexStr2bArr(encryption_key, conf_key, sizeof(encryption_key));
   hexStr2bArr(authentication_key, conf_authkey, sizeof(authentication_key));
   Serial.println("Setup completed");
@@ -266,9 +275,13 @@ void sendmsg(String topic, String payload) {
 void loop() {
   while (Serial1.available() > 0) {
     //for(int i=0;i<sizeof(input);i++){
-//    int byte = Serial1.read();
-//    Serial.printf("%c(%02X)", byte, byte);
-    if (streamParser.pushData(Serial1.read())) {
+    int byte = Serial1.read();
+    if(byte > ' ' && byte <= 0x7F)
+      Serial.printf("%c", byte);
+    else
+      Serial.printf("[%02X]", byte);
+
+    if (streamParser.pushData(byte)) {//Serial1.read()
       //  if (streamParser.pushData(input[i])) {
       VectorView frame = streamParser.getFrame();
       if (streamParser.getContentType() == MbusStreamParser::COMPLETE_FRAME) {
