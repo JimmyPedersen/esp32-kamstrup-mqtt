@@ -5,6 +5,9 @@
 #include "secrets.h"
 #include "esp_log.h"
 #include "mbedtls/gcm.h"
+#include "LEDs.hpp"
+#include "ButtonHandler.hpp"
+#include "Logger.hpp"
 
 void hexStr2bArr(uint8_t* dest, const char* source, int bytes_n);
 void sendmsg(String topic, String payload);
@@ -39,22 +42,137 @@ mbedtls_gcm_context m_ctx;
 unsigned long currentMillis;
 unsigned long previousMillis;
 unsigned long wifiReconnectInterval = 30000;
+#define PIN_BUTTON_LED  9     // GPIO9 where WS2812B and button is connected
+
+LEDs LED(1, PIN_BUTTON_LED);        // Initialize the LED strip with 1 LED on pin 9
+ButtonHandler button(PIN_BUTTON_LED, LOW);
+TaskHandle_t ledButtonTaskHandle = nullptr;
+
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+
+
+
+// Button callback handler
+void onButtonEvent(ClickType type) {
+  switch(type) {
+    case SINGLE_CLICK:
+      Log.notice("Button: SINGLE_CLICK\n");
+      LED.Blink(1, LEDs::ColorG, 250, 250);
+      break;
+
+    case DOUBLE_CLICK:
+      Log.notice("Button: DOUBLE_CLICK\n");
+      LED.Blink(2, LEDs::ColorG, 250, 250);
+      break;
+
+    case TRIPLE_CLICK:
+      Log.notice("Button: TRIPLE_CLICK\n");
+      LED.Blink(3, LEDs::ColorG, 250, 250);
+      break;
+
+    case LONG_PRESS_3S_RELEASED:
+      Log.notice("Button: LONG_PRESS_3S_RELEASED\n");
+      LED.Blink(3, LEDs::ColorR, 250, 250);
+      break;
+
+    case LONG_PRESS_5S_RELEASED:
+      Log.notice("Button: LONG_PRESS_5S_RELEASED\n");
+      LED.Blink(5, LEDs::ColorG, 250, 250);
+      break;
+
+    case LONG_PRESS_10S_RELEASED:
+      Log.notice("Button: LONG_PRESS_10S_RELEASED\n");
+      LED.Blink(10, LEDs::ColorB, 250, 250);
+      break;
+
+    case LONG_PRESS_3S_HELD:
+      Log.notice("Button: LONG_PRESS_3S_HELD\n");
+      LED.setColorNow(LED.ColorR);
+      break;
+
+    case LONG_PRESS_5S_HELD:
+      Log.notice("Button: LONG_PRESS_5S_HELD\n");
+      LED.setColorNow(LED.ColorG);
+      break;
+
+    case LONG_PRESS_10S_HELD:
+      Log.notice("Button: LONG_PRESS_10S_HELD\n");
+      LED.setColorNow(LED.ColorB);
+      break;
+      
+    default:
+      Log.notice("Button: UNKNOWN EVENT\n");
+      break;
+  }
+}
+
+
+// LED/Button handler task function
+void ledButtonTask(void* pvParameters) {
+    while (true) {
+        LED.Handler();
+        button.checkButtonClick();
+        vTaskDelay(pdMS_TO_TICKS(10)); // Run every 10ms
+    }
+}
+
 
 void setup() {
   //DEBUG_BEGIN
   //DEBUG_PRINTLN("")
   Serial.begin(115200);
   
-  Serial.println(" I can print something");
-  //pinMode(BUILTIN_LED, OUTPUT);
-  
+// Set debug level
+#ifdef DEBUG
+  // Allow debug output to serial if in debug mode
+  Serial.setDebugOutput(true);
+  esp_log_level_set("*", ESP_LOG_DEBUG); 
+#elif defined(RELEASE)
+  esp_log_level_set("*", ESP_LOG_NONE);
+#else
+  esp_log_level_set("*", ESP_LOG_INFO); // ESP_LOG_VERBOSE TODO: Restore this to ESP_LOG_INFO
+#endif
+
+
+//  Serial.setDebugOutput(true);
+  Log.begin(USE_LOG_LEVEL, &Serial, true);
+  Log.setShowLevel(true);
+
+//   Log.setSuffix(printSuffix);   
+  Log.setSuffix( [](Print *_logOutput, int level)  {
+    _logOutput->print("\n");
+  });
+
+
 
   esp_log_level_set("wifi", ESP_LOG_VERBOSE);
 
   WiFi.printDiag(Serial);  // Prints current WiFi config
+
+
+  Log.notice("Logging initialized");
+
+  LED.Begin();
+
+  LEDs::LEDColor color = static_cast<LEDs::LEDColor>(0x101010); // Low brightness white
+  LED.setColorNow(color);                // Set initial color
+  LED.setDefaultColorAfterBlinks(color); // Set default color after blinks
+  LED.setDefaultColor2(color);           // Set default color 2 in blinking
+
+  button.setCallback(onButtonEvent);  // Set the button event callback
+
+  // Create LED/Button handler task
+  xTaskCreate(
+      ledButtonTask,         // Task function
+      "LedButtonTask",       // Name
+      2048,                  // Stack size
+      nullptr,               // Parameters
+      2,                     // Priority (higher than idle)
+      &ledButtonTaskHandle   // Task handle
+  );
+
 
   WiFi.disconnect(true, true); // erase old credentials
   WiFi.mode(WIFI_STA);
@@ -291,6 +409,7 @@ void loop() {
           DEBUG_PRINTLN("Decryption failed");
           return;
         }
+        LED.Blink(1, LEDs::ColorB, 500);
         MeterData md = parseMbusFrame(decryptedFrame);
         sendData(md);
       }
