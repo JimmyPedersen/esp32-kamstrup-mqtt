@@ -12,7 +12,8 @@
 void hexStr2bArr(uint8_t* dest, const char* source, int bytes_n);
 void sendmsg(String topic, String payload);
 
-#define IS_DNODE_NVE  true  // True if dNodeNVE. False if testing RX data on TXD pin (to be used in P1+NVE hybrid card)
+#define IS_DNODE_NVE  false  // True if dNodeNVE. False if testing RX data on TXD pin (to be used in P1+NVE hybrid card)
+#define IS_DNODE_OMNI  true  // True if dNodeNVE. False if testing RX data on TXD pin (to be used in P1+NVE hybrid card)
 
 #define DEBUG_BEGIN Serial.begin(115200);
 #define DEBUG_PRINT(x) Serial.print(x);sendmsg(String(mqtt_topic)+"/status",x);
@@ -20,12 +21,25 @@ void sendmsg(String topic, String payload);
 
 // Pins used for HAN port
 #if IS_DNODE_NVE
-  #define METER_RX 20//11//4
-  #define METER_TX 21//10//5
+  #define METER_RX 20//4
+  #define METER_TX 10//5
+//  #define METER_RX 20//11//4
+//  #define METER_TX 21//10//5
+  #define NO_OF_LEDS  1
+#elif IS_DNODE_OMNI
+  // Omni configuration
+  #define METER_RX    38
+  #define METER_TX    18
+  #define PIN_LED     47     // GPIO9 where WS2812B is connected
+  #define PIN_BUTTON  0     // GPIO9 where button is connected
+  #define NO_OF_LEDS  3
+  #define DISABLE_RX_PULLUP
 #else
   // For testing hybrid board configuration with P1 on RXD and NVE on TXD
   #define METER_RX 21 //20//11//4
   #define METER_TX -1 //21//10//5
+  #define NO_OF_LEDS  1
+  #define INVERT_RX_LINE
 #endif
 
 const size_t headersize = 11;
@@ -42,10 +56,10 @@ mbedtls_gcm_context m_ctx;
 unsigned long currentMillis;
 unsigned long previousMillis;
 unsigned long wifiReconnectInterval = 30000;
-#define PIN_BUTTON_LED  9     // GPIO9 where WS2812B and button is connected
 
-LEDs LED(1, PIN_BUTTON_LED);        // Initialize the LED strip with 1 LED on pin 9
-ButtonHandler button(PIN_BUTTON_LED, LOW);
+
+LEDs LED(NO_OF_LEDS, PIN_LED, PIN_BUTTON==PIN_LED);               // Initialize the LED strip with 1 LED on pin 9
+ButtonHandler button(PIN_BUTTON, LOW);
 TaskHandle_t ledButtonTaskHandle = nullptr;
 
 
@@ -149,7 +163,7 @@ void setup() {
 
   esp_log_level_set("wifi", ESP_LOG_VERBOSE);
 
-  WiFi.printDiag(Serial);  // Prints current WiFi config
+//  WiFi.printDiag(Serial);  // Prints current WiFi config
 
 
   Log.notice("Logging initialized");
@@ -184,8 +198,13 @@ void setup() {
     Serial.println("Connecting to WiFi..");
   }
   Serial.println("Connected to the WiFi network");
-  WiFi.printDiag(Serial); // Print diagnostic info
+//  WiFi.printDiag(Serial); // Print diagnostic info
 
+Serial.print("WiFi Status: ");
+Serial.println(WiFi.status());
+Serial.print("IP Address: ");
+Serial.println(WiFi.localIP());
+client.setSocketTimeout(15); // 15 seconds
   client.setServer(mqttServer, mqttPort);  
   while (!client.connected()) {
     Serial.println("Connecting to MQTT...");
@@ -203,9 +222,12 @@ void setup() {
 //  Serial.swap();
 
   Serial1.begin(2400, SERIAL_8N1, METER_RX, METER_TX);
+#ifndef DISABLE_RX_PULLUP
   pinMode(METER_RX, INPUT_PULLUP);
-//  Serial1.setRxInvert(true);
-
+#endif
+#ifdef INVERT_RX_LINE
+  Serial1.setRxInvert(true);
+#endif
   hexStr2bArr(encryption_key, conf_key, sizeof(encryption_key));
   hexStr2bArr(authentication_key, conf_authkey, sizeof(authentication_key));
   Serial.println("Setup completed");
@@ -399,11 +421,13 @@ void loop() {
     else
       Serial.printf("[%02X]", byte);
 
+    Serial.printf("%02X ", byte);
+
     if (streamParser.pushData(byte)) {//Serial1.read()
       //  if (streamParser.pushData(input[i])) {
       VectorView frame = streamParser.getFrame();
       if (streamParser.getContentType() == MbusStreamParser::COMPLETE_FRAME) {
-        DEBUG_PRINTLN("Frame complete");
+        DEBUG_PRINTLN("\nFrame complete");
         if (!decrypt(frame))
         {
           DEBUG_PRINTLN("Decryption failed");
@@ -419,4 +443,11 @@ void loop() {
   reconnectWifi();
 
   client.loop();
+
+  static unsigned long lastTestMillis = 0;
+  if (millis() - lastTestMillis >= 5000) {
+    lastTestMillis = millis();
+//    Serial1.println("ESP->METER");
+//    Serial1.flush();
+  }
 }

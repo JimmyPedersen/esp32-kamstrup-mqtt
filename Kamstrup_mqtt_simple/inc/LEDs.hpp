@@ -32,8 +32,8 @@ public:
     static constexpr const char* TAG = "LEDs";
 
     // Constructor: specify number of LEDs and pin
-    LEDs(uint16_t numPixels, uint8_t pin) 
-        : Adafruit_NeoPixel(numPixels, pin, NEO_GRB + NEO_KHZ800),   _pin(pin), _pixelCount(numPixels), _isDirty(true) {
+    LEDs(uint16_t numPixels, uint8_t pin, bool pinSharedWithButton = false) 
+        : Adafruit_NeoPixel(numPixels, pin, NEO_GRB + NEO_KHZ800),   _pin(pin), _pixelCount(numPixels), _isDirty(true), _pinSharedWithButton(pinSharedWithButton) {
         // Initialize the strip with the specified number of pixels and pin
 //        this->begin();
             _DefaultColorAfterBlinks = ColorOff;
@@ -129,19 +129,25 @@ public:
             _isDirty = false;          // Reset the dirty flag after showing
 
             // Set pin as output to control the LED strip
-            pinMode(_pin, OUTPUT);
-            vTaskDelay(1); // Small delay to ensure pin is set before showing
+            if (_pinSharedWithButton) {
+                pinMode(_pin, OUTPUT);
+                vTaskDelay(1); // Small delay to ensure pin is set before showing
+            }
+//            pinMode(_pin, OUTPUT);
+//            vTaskDelay(1); // Small delay to ensure pin is set before showing
 //           ESP_LOGD(TAG, "Updating LED strip on pin %d", _pin);
 
 //            unsigned long start = millis();
             Adafruit_NeoPixel::show(); // Call the base class show()
 //            unsigned long end = millis();
 //            ESP_LOGD(TAG, "LED strip updated in %lu ms", end - start);
-
-            vTaskDelay(1); // Small delay to ensure pin is set before showing
+            if(_pinSharedWithButton) {
+                vTaskDelay(1); // Small delay to ensure pin is set before showing               
+                pinMode(_pin, INPUT_PULLUP); // Set pin back to input to allow for button press detection
+            }
 
             // Set pin back to input to allow for button press detection
-            pinMode(_pin, INPUT_PULLUP);
+//            pinMode(_pin, INPUT_PULLUP);
         }
     }
 
@@ -254,4 +260,5 @@ private:
     uint8_t _pin;                // Pin number for the LED strip
     volatile bool _isDirty;      // Flag to indicate if the strip needs to be updated
     uint16_t _pixelCount;         // Number of pixels in the strip
+    bool _pinSharedWithButton;   // Flag to indicate if the pin is shared with a button
 };
